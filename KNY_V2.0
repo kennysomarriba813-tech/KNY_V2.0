@@ -1,0 +1,1250 @@
+-- KNY V2.0 - Base Optimizada + 8 Fallos Corregidos + Sin Relleno
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+
+local lp = Players.LocalPlayer
+if not lp then
+	Players.PlayerAdded:Wait()
+	lp = Players.LocalPlayer
+end
+
+local function GetGuiRoot()
+	local ok1, hui = pcall(function()
+		return type(gethui) == "function" and gethui() or nil
+	end)
+	if ok1 and typeof(hui) == "Instance" then return hui end
+
+	local ok2, cg = pcall(function()
+		local g = game:GetService("CoreGui")
+		local f = Instance.new("Folder")
+		f.Parent = g
+		f:Destroy()
+		return g
+	end)
+	if ok2 and cg then return cg end
+
+	return lp:FindFirstChildOfClass("PlayerGui") or lp:WaitForChild("PlayerGui", 10)
+end
+
+local Root = GetGuiRoot()
+if not Root then return end
+
+pcall(function()
+	local old = Root:FindFirstChild("KNY_V20")
+	if old then old:Destroy() end
+end)
+
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "KNY_V20"
+Gui.ResetOnSpawn = false
+Gui.IgnoreGuiInset = true
+Gui.Parent = Root
+
+local Conns = {}
+local function On(c) table.insert(Conns, c); return c end
+
+local Pal = {
+	Bg = Color3.fromRGB(11, 14, 21),
+	Card = Color3.fromRGB(21, 26, 38),
+	Card2 = Color3.fromRGB(28, 35, 50),
+	Red = Color3.fromRGB(198, 34, 64),
+	Gold = Color3.fromRGB(216, 170, 56),
+	Green = Color3.fromRGB(34, 168, 122),
+	Cyan = Color3.fromRGB(56, 176, 206),
+	Txt = Color3.fromRGB(224, 230, 240),
+	Sub = Color3.fromRGB(146, 158, 176)
+}
+
+local function Rad(obj, r)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, r or 8)
+	c.Parent = obj
+end
+
+local function Stroke(obj, col, th)
+	local s = Instance.new("UIStroke")
+	s.Color = col
+	s.Thickness = th or 1
+	s.Parent = obj
+end
+
+local function Drag(handle, target)
+	local down, inpObj, p0, u0 = false, nil, Vector2.zero, target.Position
+	On(handle.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			down = true; inpObj = i; p0 = i.Position; u0 = target.Position
+			i.Changed:Connect(function()
+				if i.UserInputState == Enum.UserInputState.End and inpObj == i then down = false; inpObj = nil end
+			end)
+		end
+	end))
+	On(UserInputService.InputChanged:Connect(function(i)
+		if down and i == inpObj and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+			local d = i.Position - p0
+			target.Position = UDim2.new(u0.X.Scale, u0.X.Offset + d.X, u0.Y.Scale, u0.Y.Offset + d.Y)
+		end
+	end))
+end
+
+-- 8. Notificaciones ordenadas sin solaparse
+local NotifArea = Instance.new("Frame")
+NotifArea.Size = UDim2.new(0, 250, 0, 165)
+NotifArea.Position = UDim2.new(1, -260, 1, -175)
+NotifArea.BackgroundTransparency = 1
+NotifArea.Parent = Gui
+
+local nList = Instance.new("UIListLayout")
+nList.FillDirection = Enum.FillDirection.Vertical
+nList.VerticalAlignment = Enum.VerticalAlignment.Bottom
+nList.HorizontalAlignment = Enum.HorizontalAlignment.Right
+nList.SortOrder = Enum.SortOrder.LayoutOrder
+nList.Padding = UDim.new(0, 5)
+nList.Parent = NotifArea
+
+local nCount = 0
+local function Notify(title, msg, col)
+	nCount += 1
+	local lb = Instance.new("TextLabel")
+	lb.Size = UDim2.new(1, 0, 0, 34)
+	lb.LayoutOrder = nCount
+	lb.BackgroundColor3 = Pal.Card2
+	lb.TextColor3 = col or Pal.Txt
+	lb.Font = Enum.Font.GothamBold
+	lb.TextSize = 10
+	lb.TextWrapped = true
+	lb.Text = title .. ": " .. msg
+	lb.Parent = NotifArea
+	Rad(lb, 6)
+	Stroke(lb, col or Pal.Red, 1)
+	task.delay(2.5, function() pcall(function() lb:Destroy() end) end)
+end
+
+-- Sistema de keys de 1 solo uso + PIN de 8 dígitos
+local KeySys = {
+	Normal = nil,
+	Vip = nil,
+	Pin8 = nil,
+	VipCode = nil,
+	Used = {},
+	Tier = "NONE"
+}
+
+local kSeq = 0
+local function GenKey(prefix, isVip)
+	local k = ""
+	repeat
+		kSeq += 1
+		local uid = tonumber(lp.UserId) or 100
+		local mix = kSeq * 157 + math.random(1000, 9999) + (uid % 977)
+		k = string.format("%s-%04d-%04d-%04d", prefix, ((mix * 19) % 8999) + 1000, ((mix * 37) % 8999) + 1000, ((mix * 53 + (isVip and 777 or 333)) % 8999) + 1000)
+	until not KeySys.Used[k]
+	return k
+end
+
+local function GenPin8()
+	local s = ""
+	for _ = 1, 8 do s ..= tostring(math.random(0, 9)) end
+	return s
+end
+
+-- ==========================================
+-- 1. CARGA DE 20s CON AVATAR 3D (PRIMARYPART CORREGIDO)
+-- ==========================================
+local LoadScreen = Instance.new("Frame")
+LoadScreen.Size = UDim2.fromScale(1, 1)
+LoadScreen.BackgroundColor3 = Pal.Bg
+LoadScreen.Parent = Gui
+
+local TitleMove = Instance.new("TextLabel")
+TitleMove.Size = UDim2.new(0, 220, 0, 30)
+TitleMove.Position = UDim2.new(0.5, -110, 0.1, 0)
+TitleMove.BackgroundTransparency = 1
+TitleMove.Font = Enum.Font.GothamBlack
+TitleMove.Text = "KNY V2.0"
+TitleMove.TextColor3 = Pal.Red
+TitleMove.TextSize = 24
+TitleMove.Parent = LoadScreen
+
+local AvatarCard = Instance.new("Frame")
+AvatarCard.Size = UDim2.new(0, 140, 0, 140)
+AvatarCard.Position = UDim2.new(0.5, -70, 0.22, 0)
+AvatarCard.BackgroundColor3 = Pal.Card
+AvatarCard.Parent = LoadScreen
+Rad(AvatarCard, 14)
+Stroke(AvatarCard, Pal.Gold, 1.5)
+
+local VpFrame = Instance.new("ViewportFrame")
+VpFrame.Size = UDim2.fromScale(1, 1)
+VpFrame.BackgroundTransparency = 1
+VpFrame.Parent = AvatarCard
+Rad(VpFrame, 14)
+
+local VpCam = Instance.new("Camera")
+VpCam.FieldOfView = 45
+VpFrame.CurrentCamera = VpCam
+VpCam.Parent = VpFrame
+
+local AvatarPivot = Instance.new("Model")
+AvatarPivot.Name = "KNY_3D_AVATAR"
+AvatarPivot.Parent = VpFrame
+
+local function Build3DAvatarPreview()
+	for _, c in ipairs(AvatarPivot:GetChildren()) do c:Destroy() end
+	AvatarPivot.PrimaryPart = nil
+
+	local char = lp.Character
+	if char then
+		pcall(function()
+			char.Archivable = true
+			local clone = char:Clone()
+			for _, obj in ipairs(clone:GetDescendants()) do
+				if obj:IsA("Script") or obj:IsA("LocalScript") or obj:IsA("ModuleScript") or obj:IsA("BillboardGui") or obj:IsA("Sound") then
+					obj:Destroy()
+				elseif obj:IsA("BasePart") then
+					obj.Anchored = true
+					obj.CanCollide = false
+				end
+			end
+			for _, part in ipairs(clone:GetChildren()) do
+				part.Parent = AvatarPivot
+			end
+			clone:Destroy()
+
+			local root = AvatarPivot:FindFirstChild("HumanoidRootPart") or AvatarPivot:FindFirstChildWhichIsA("BasePart")
+			if root then
+				AvatarPivot.PrimaryPart = root
+				AvatarPivot:PivotTo(CFrame.new(0, 0, 0))
+			end
+		end)
+	end
+
+	if not AvatarPivot.PrimaryPart then
+		for _, c in ipairs(AvatarPivot:GetChildren()) do c:Destroy() end
+		local torso = Instance.new("Part")
+		torso.Name = "HumanoidRootPart"
+		torso.Size = Vector3.new(2, 2.2, 1)
+		torso.Position = Vector3.new(0, 0, 0)
+		torso.Color = Pal.Card2
+		torso.Anchored = true
+		torso.Parent = AvatarPivot
+
+		local head = Instance.new("Part")
+		head.Name = "Head"
+		head.Size = Vector3.new(1.2, 1.2, 1.2)
+		head.Position = Vector3.new(0, 1.75, 0)
+		head.Color = Pal.Txt
+		head.Anchored = true
+		head.Parent = AvatarPivot
+
+		AvatarPivot.PrimaryPart = torso
+	end
+
+	VpCam.CFrame = CFrame.new(Vector3.new(0, 1.1, 6.2), Vector3.new(0, 0.8, 0))
+end
+
+Build3DAvatarPreview()
+On(lp.CharacterAdded:Connect(function()
+	task.wait(0.25)
+	Build3DAvatarPreview()
+end))
+
+local PlayerTag = Instance.new("TextLabel")
+PlayerTag.Size = UDim2.new(0.8, 0, 0, 22)
+PlayerTag.Position = UDim2.new(0.1, 0, 0.63, 0)
+PlayerTag.BackgroundTransparency = 1
+PlayerTag.Font = Enum.Font.GothamBold
+PlayerTag.Text = lp.DisplayName .. " (@" .. lp.Name .. ")"
+PlayerTag.TextColor3 = Pal.Txt
+PlayerTag.TextSize = 12
+PlayerTag.Parent = LoadScreen
+
+local LoadBarBg = Instance.new("Frame")
+LoadBarBg.Size = UDim2.new(0.7, 0, 0, 10)
+LoadBarBg.Position = UDim2.new(0.15, 0, 0.71, 0)
+LoadBarBg.BackgroundColor3 = Pal.Card
+LoadBarBg.Parent = LoadScreen
+Rad(LoadBarBg, 5)
+
+local LoadBarFill = Instance.new("Frame")
+LoadBarFill.Size = UDim2.new(0, 0, 1, 0)
+LoadBarFill.BackgroundColor3 = Pal.Red
+LoadBarFill.Parent = LoadBarBg
+Rad(LoadBarFill, 5)
+
+local LoadStatus = Instance.new("TextLabel")
+LoadStatus.Size = UDim2.new(0.7, 0, 0, 22)
+LoadStatus.Position = UDim2.new(0.15, 0, 0.76, 0)
+LoadStatus.BackgroundTransparency = 1
+LoadStatus.Font = Enum.Font.GothamBold
+LoadStatus.Text = "Cargando 3D: 0% (20.0s)"
+LoadStatus.TextColor3 = Pal.Sub
+LoadStatus.TextSize = 11
+LoadStatus.Parent = LoadScreen
+
+-- ==========================================
+-- 2. PANTALLA DE KEY DESPLAZABLE
+-- ==========================================
+local KeyWin = Instance.new("Frame")
+KeyWin.Size = UDim2.new(0.86, 0, 0.82, 0)
+KeyWin.Position = UDim2.new(0.52, 0, 0.5, 0)
+KeyWin.AnchorPoint = Vector2.new(0.5, 0.5)
+KeyWin.BackgroundColor3 = Pal.Bg
+KeyWin.Visible = false
+KeyWin.Parent = Gui
+Rad(KeyWin, 10)
+Stroke(KeyWin, Pal.Red, 1.2)
+
+local KTitle = Instance.new("TextLabel")
+KTitle.Size = UDim2.new(1, -44, 0, 32)
+KTitle.Position = UDim2.new(0, 18, 0, 8)
+KTitle.BackgroundTransparency = 1
+KTitle.Font = Enum.Font.GothamBlack
+KTitle.Text = "KNY V2.0 • KEY"
+KTitle.TextColor3 = Pal.Txt
+KTitle.TextSize = 13
+KTitle.TextXAlignment = Enum.TextXAlignment.Left
+KTitle.Parent = KeyWin
+
+local KX = Instance.new("TextButton")
+KX.Size = UDim2.new(0, 26, 0, 26)
+KX.Position = UDim2.new(1, -34, 0, 10)
+KX.BackgroundColor3 = Pal.Card
+KX.Font = Enum.Font.GothamBlack
+KX.Text = "X"
+KX.TextColor3 = Pal.Red
+KX.TextSize = 13
+KX.Parent = KeyWin
+Rad(KX, 6)
+
+local KeyInput = Instance.new("TextBox")
+KeyInput.Size = UDim2.new(1, -24, 0, 30)
+KeyInput.Position = UDim2.new(0, 12, 0, 44)
+KeyInput.BackgroundColor3 = Pal.Card
+KeyInput.Font = Enum.Font.GothamBold
+KeyInput.PlaceholderText = "K9-... o KVIP-..."
+KeyInput.Text = ""
+KeyInput.TextColor3 = Pal.Txt
+KeyInput.TextSize = 11
+KeyInput.ClearTextOnFocus = false
+KeyInput.Parent = KeyWin
+Rad(KeyInput, 6)
+
+local EnterBtn = Instance.new("TextButton")
+EnterBtn.Size = UDim2.new(1, -24, 0, 32)
+EnterBtn.Position = UDim2.new(0, 12, 0, 80)
+EnterBtn.BackgroundColor3 = Pal.Red
+EnterBtn.Font = Enum.Font.GothamBlack
+EnterBtn.Text = "VALIDAR KEY (1 USO)"
+EnterBtn.TextColor3 = Pal.Txt
+EnterBtn.TextSize = 11
+EnterBtn.Parent = KeyWin
+Rad(EnterBtn, 6)
+
+local NormTab = Instance.new("TextButton")
+NormTab.Size = UDim2.new(0.48, -14, 0, 28)
+NormTab.Position = UDim2.new(0, 12, 0, 118)
+NormTab.BackgroundColor3 = Pal.Red
+NormTab.Font = Enum.Font.GothamBold
+NormTab.Text = "NORMAL"
+NormTab.TextColor3 = Pal.Txt
+NormTab.TextSize = 10
+NormTab.Parent = KeyWin
+Rad(NormTab, 6)
+
+local VipTab = Instance.new("TextButton")
+VipTab.Size = UDim2.new(0.48, -14, 0, 28)
+VipTab.Position = UDim2.new(0.52, 2, 0, 118)
+VipTab.BackgroundColor3 = Pal.Card
+VipTab.Font = Enum.Font.GothamBold
+VipTab.Text = "VIP / OP"
+VipTab.TextColor3 = Pal.Gold
+VipTab.TextSize = 10
+VipTab.Parent = KeyWin
+Rad(VipTab, 6)
+
+local KScroll = Instance.new("ScrollingFrame")
+KScroll.Size = UDim2.new(1, -24, 1, -156)
+KScroll.Position = UDim2.new(0, 12, 0, 152)
+KScroll.BackgroundColor3 = Pal.Card
+KScroll.ScrollBarThickness = 3
+KScroll.CanvasSize = UDim2.new(0, 0, 0, 250)
+KScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+KScroll.Parent = KeyWin
+Rad(KScroll, 8)
+
+local ksPad = Instance.new("UIPadding")
+ksPad.PaddingTop = UDim.new(0, 6); ksPad.PaddingLeft = UDim.new(0, 6); ksPad.PaddingRight = UDim.new(0, 8); ksPad.PaddingBottom = UDim.new(0, 8)
+ksPad.Parent = KScroll
+
+local ksLay = Instance.new("UIListLayout")
+ksLay.Padding = UDim.new(0, 5); ksLay.SortOrder = Enum.SortOrder.LayoutOrder; ksLay.Parent = KScroll
+
+local PinDisplay = Instance.new("TextLabel")
+PinDisplay.Size = UDim2.new(1, 0, 0, 18)
+PinDisplay.BackgroundTransparency = 1
+PinDisplay.Font = Enum.Font.GothamBold
+PinDisplay.Text = "PIN 8: --------"
+PinDisplay.TextColor3 = Pal.Gold
+PinDisplay.TextSize = 10
+PinDisplay.TextXAlignment = Enum.TextXAlignment.Left
+PinDisplay.LayoutOrder = 1
+PinDisplay.Parent = KScroll
+
+local Pin8In = Instance.new("TextBox")
+Pin8In.Size = UDim2.new(1, 0, 0, 26)
+Pin8In.BackgroundColor3 = Pal.Bg
+Pin8In.Font = Enum.Font.GothamBold
+Pin8In.PlaceholderText = "Escribe PIN de 8 dígitos"
+Pin8In.Text = ""
+Pin8In.TextColor3 = Pal.Txt
+Pin8In.TextSize = 10
+Pin8In.ClearTextOnFocus = false
+Pin8In.LayoutOrder = 2
+Pin8In.Parent = KScroll
+Rad(Pin8In, 5)
+
+local VipCodeIn = Instance.new("TextBox")
+VipCodeIn.Size = UDim2.new(1, 0, 0, 26)
+VipCodeIn.BackgroundColor3 = Pal.Bg
+VipCodeIn.Font = Enum.Font.GothamBold
+VipCodeIn.PlaceholderText = "Código VIP"
+VipCodeIn.Text = ""
+VipCodeIn.TextColor3 = Pal.Gold
+VipCodeIn.TextSize = 10
+VipCodeIn.ClearTextOnFocus = false
+VipCodeIn.Visible = false
+VipCodeIn.LayoutOrder = 3
+VipCodeIn.Parent = KScroll
+Rad(VipCodeIn, 5)
+
+local StepsBox = Instance.new("Frame")
+StepsBox.Size = UDim2.new(1, 0, 0, 26)
+StepsBox.BackgroundTransparency = 1
+StepsBox.Visible = false
+StepsBox.LayoutOrder = 4
+StepsBox.Parent = KScroll
+
+local stepOk1, stepOk2, stepOk3 = false, false, false
+for i = 1, 3 do
+	local sb = Instance.new("TextButton")
+	sb.Size = UDim2.new(0.32, -2, 1, 0)
+	sb.Position = UDim2.new((i - 1) * 0.34, 0, 0, 0)
+	sb.BackgroundColor3 = Pal.Bg
+	sb.Font = Enum.Font.GothamBold
+	sb.Text = "PASO " .. tostring(i)
+	sb.TextColor3 = Pal.Sub
+	sb.TextSize = 9
+	sb.Parent = StepsBox
+	Rad(sb, 5)
+	sb.MouseButton1Click:Connect(function()
+		if i == 1 and not stepOk1 then stepOk1 = true; sb.Text = "1 OK"; sb.TextColor3 = Pal.Green
+		elseif i == 2 and stepOk1 and not stepOk2 then stepOk2 = true; sb.Text = "2 OK"; sb.TextColor3 = Pal.Green
+		elseif i == 3 and stepOk1 and stepOk2 and not stepOk3 then stepOk3 = true; sb.Text = "3 OK"; sb.TextColor3 = Pal.Green
+		else Notify("Pasos", "Orden: 1, 2, 3", Pal.Red) end
+	end)
+end
+
+local TrialAction = Instance.new("TextButton")
+TrialAction.Size = UDim2.new(1, 0, 0, 30)
+TrialAction.BackgroundColor3 = Pal.Green
+TrialAction.Font = Enum.Font.GothamBlack
+TrialAction.Text = "INICIAR PRUEBA"
+TrialAction.TextColor3 = Pal.Bg
+TrialAction.TextSize = 10
+TrialAction.LayoutOrder = 5
+TrialAction.Parent = KScroll
+Rad(TrialAction, 6)
+
+local KeyMsg = Instance.new("TextLabel")
+KeyMsg.Size = UDim2.new(1, 0, 0, 32)
+KeyMsg.BackgroundTransparency = 1
+KeyMsg.Font = Enum.Font.Gotham
+KeyMsg.Text = "Completa la prueba para generar tu key."
+KeyMsg.TextColor3 = Pal.Sub
+KeyMsg.TextSize = 9.5
+KeyMsg.TextWrapped = true
+KeyMsg.TextXAlignment = Enum.TextXAlignment.Left
+KeyMsg.LayoutOrder = 6
+KeyMsg.Parent = KScroll
+
+local isVipMode, phase, tStart, taps, lastTap = false, "IDLE", 0, 0, 0
+
+local function ResetSteps()
+	stepOk1, stepOk2, stepOk3 = false, false, false
+	for _, c in ipairs(StepsBox:GetChildren()) do
+		if c:IsA("TextButton") then
+			c.Text = c.Text:sub(1, 6)
+			c.TextColor3 = Pal.Sub
+		end
+	end
+end
+
+local function SetMode(vip)
+	isVipMode = vip; phase = "IDLE"; taps = 0
+	KeySys.Pin8 = nil; KeySys.VipCode = nil
+	Pin8In.Text = ""; VipCodeIn.Text = ""; ResetSteps()
+	VipCodeIn.Visible = vip; StepsBox.Visible = vip
+	NormTab.BackgroundColor3 = vip and Pal.Card or Pal.Red
+	VipTab.BackgroundColor3 = vip and Color3.fromRGB(70, 55, 20) or Pal.Card
+	TrialAction.Text = vip and "PRUEBA VIP (35s • 25 toques)" or "PRUEBA NORMAL (12s • 10 toques)"
+	KeyMsg.Text = vip and "VIP: 35s, 25 toques, pasos 1-2-3, PIN 8 y código VIP." or "Normal: 12s, 10 toques y PIN 8."
+end
+
+NormTab.MouseButton1Click:Connect(function() SetMode(false) end)
+VipTab.MouseButton1Click:Connect(function() SetMode(true) end)
+
+TrialAction.MouseButton1Click:Connect(function()
+	local needT = isVipMode and 25 or 10
+	if phase == "IDLE" then
+		phase = "RUN"; tStart = os.clock(); taps = 0
+		KeySys.Pin8 = GenPin8()
+		KeySys.VipCode = isVipMode and tostring(math.random(100000, 999999)) or nil
+		Pin8In.Text = ""; VipCodeIn.Text = ""; ResetSteps()
+		PinDisplay.Text = "PIN 8: " .. KeySys.Pin8 .. (KeySys.VipCode and (" | VIP: " .. KeySys.VipCode) or "")
+		TrialAction.Text = "TOCAR (0/" .. tostring(needT) .. ")"
+		Notify("Prueba", "PIN de 8 dígitos listo.", Pal.Green)
+	elseif phase == "RUN" then
+		if os.clock() - lastTap < 0.07 then return end
+		lastTap = os.clock(); taps += 1
+		if taps < needT then
+			TrialAction.Text = "TOCAR (" .. tostring(taps) .. "/" .. tostring(needT) .. ")"
+		else
+			TrialAction.Text = "COMPLETA TIEMPO Y PIN"
+		end
+	elseif phase == "DONE" then
+		pcall(function() if type(setclipboard) == "function" then setclipboard(KeyInput.Text) end end)
+		Notify("Key", "Copiada: " .. KeyInput.Text, Pal.Green)
+	end
+end)
+
+-- ==========================================
+-- 3. MENÚ KNY V2.0 + CONTROLES MÓVILES FLY/AIM
+-- ==========================================
+local FloatBtn = Instance.new("TextButton")
+FloatBtn.Size = UDim2.new(0, 52, 0, 52)
+FloatBtn.Position = UDim2.new(0, 20, 0.5, -26)
+FloatBtn.BackgroundColor3 = Pal.Card
+FloatBtn.Font = Enum.Font.GothamBlack
+FloatBtn.Text = "KNY"
+FloatBtn.TextColor3 = Pal.Red
+FloatBtn.TextSize = 13
+FloatBtn.Visible = false
+FloatBtn.Parent = Gui
+Rad(FloatBtn, 26)
+Stroke(FloatBtn, Pal.Red, 1.5)
+Drag(FloatBtn, FloatBtn)
+
+-- 4. Controles táctiles de Fly (Subir / Bajar) para móvil
+local FlyPad = Instance.new("Frame")
+FlyPad.Size = UDim2.new(0, 66, 0, 108)
+FlyPad.Position = UDim2.new(1, -82, 0.5, -54)
+FlyPad.BackgroundTransparency = 1
+FlyPad.Visible = false
+FlyPad.Parent = Gui
+
+local flyUpHeld, flyDownHeld = false, false
+
+local FlyUpBtn = Instance.new("TextButton")
+FlyUpBtn.Size = UDim2.new(1, 0, 0, 48)
+FlyUpBtn.Position = UDim2.new(0, 0, 0, 0)
+FlyUpBtn.BackgroundColor3 = Pal.Card2
+FlyUpBtn.Font = Enum.Font.GothamBlack
+FlyUpBtn.Text = "SUBIR"
+FlyUpBtn.TextColor3 = Pal.Green
+FlyUpBtn.TextSize = 10
+FlyUpBtn.Parent = FlyPad
+Rad(FlyUpBtn, 8)
+Stroke(FlyUpBtn, Pal.Green, 1.2)
+
+local FlyDownBtn = Instance.new("TextButton")
+FlyDownBtn.Size = UDim2.new(1, 0, 0, 48)
+FlyDownBtn.Position = UDim2.new(0, 0, 1, -48)
+FlyDownBtn.BackgroundColor3 = Pal.Card2
+FlyDownBtn.Font = Enum.Font.GothamBlack
+FlyDownBtn.Text = "BAJAR"
+FlyDownBtn.TextColor3 = Pal.Red
+FlyDownBtn.TextSize = 10
+FlyDownBtn.Parent = FlyPad
+Rad(FlyDownBtn, 8)
+Stroke(FlyDownBtn, Pal.Red, 1.2)
+
+On(FlyUpBtn.InputBegan:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then flyUpHeld = true end
+end))
+On(FlyUpBtn.InputEnded:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then flyUpHeld = false end
+end))
+On(FlyDownBtn.InputBegan:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then flyDownHeld = true end
+end))
+On(FlyDownBtn.InputEnded:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then flyDownHeld = false end
+end))
+
+-- 7. Círculo de FOV visible y botón Hold para Aimbot
+local FovCircle = Instance.new("Frame")
+FovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+FovCircle.Position = UDim2.fromScale(0.5, 0.5)
+FovCircle.Size = UDim2.new(0, 300, 0, 300)
+FovCircle.BackgroundTransparency = 1
+FovCircle.Visible = false
+FovCircle.Parent = Gui
+Rad(FovCircle, 150)
+local fovStroke = Stroke(FovCircle, Pal.Cyan, 1.4)
+
+local aimHoldTouch = false
+local AimHoldBtn = Instance.new("TextButton")
+AimHoldBtn.Size = UDim2.new(0, 62, 0, 42)
+AimHoldBtn.Position = UDim2.new(1, -154, 0.68, 0)
+AimHoldBtn.BackgroundColor3 = Pal.Card2
+AimHoldBtn.Font = Enum.Font.GothamBlack
+AimHoldBtn.Text = "AIM"
+AimHoldBtn.TextColor3 = Pal.Cyan
+AimHoldBtn.TextSize = 11
+AimHoldBtn.Visible = false
+AimHoldBtn.Parent = Gui
+Rad(AimHoldBtn, 8)
+Stroke(AimHoldBtn, Pal.Cyan, 1.4)
+
+On(AimHoldBtn.InputBegan:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then aimHoldTouch = true end
+end))
+On(AimHoldBtn.InputEnded:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then aimHoldTouch = false end
+end))
+
+local Main = Instance.new("Frame")
+Main.Size = UDim2.new(0, 520, 0, 340)
+Main.Position = UDim2.new(0.5, -260, 0.5, -170)
+Main.BackgroundColor3 = Pal.Bg
+Main.Visible = false
+Main.Parent = Gui
+Rad(Main, 10)
+Stroke(Main, Pal.Card2, 1.2)
+
+local Head = Instance.new("Frame")
+Head.Size = UDim2.new(1, 0, 0, 38)
+Head.BackgroundColor3 = Pal.Card
+Head.Parent = Main
+Rad(Head, 10)
+Drag(Head, Main)
+
+local MainTitle = Instance.new("TextLabel")
+MainTitle.Size = UDim2.new(1, -80, 1, 0)
+MainTitle.Position = UDim2.new(0, 12, 0, 0)
+MainTitle.BackgroundTransparency = 1
+MainTitle.Font = Enum.Font.GothamBlack
+MainTitle.Text = "KNY V2.0"
+MainTitle.TextColor3 = Pal.Txt
+MainTitle.TextSize = 12
+MainTitle.TextXAlignment = Enum.TextXAlignment.Left
+MainTitle.Parent = Head
+
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 24, 0, 24)
+MinBtn.Position = UDim2.new(1, -56, 0.5, -12)
+MinBtn.BackgroundColor3 = Pal.Bg
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.Text = "-"
+MinBtn.TextColor3 = Pal.Gold
+MinBtn.Parent = Head
+Rad(MinBtn, 5)
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 24, 0, 24)
+CloseBtn.Position = UDim2.new(1, -28, 0.5, -12)
+CloseBtn.BackgroundColor3 = Pal.Bg
+CloseBtn.Font = Enum.Font.GothamBlack
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Pal.Red
+CloseBtn.Parent = Head
+Rad(CloseBtn, 5)
+
+local Side = Instance.new("Frame")
+Side.Size = UDim2.new(0, 112, 1, -48)
+Side.Position = UDim2.new(0, 8, 0, 44)
+Side.BackgroundColor3 = Pal.Card
+Side.Parent = Main
+Rad(Side, 8)
+local sLay = Instance.new("UIListLayout"); sLay.Padding = UDim.new(0, 5); sLay.HorizontalAlignment = Enum.HorizontalAlignment.Center; sLay.Parent = Side
+local sPad = Instance.new("UIPadding"); sPad.PaddingTop = UDim.new(0, 6); sPad.Parent = Side
+
+local Body = Instance.new("Frame")
+Body.Size = UDim2.new(1, -132, 1, -48)
+Body.Position = UDim2.new(0, 126, 0, 44)
+Body.BackgroundTransparency = 1
+Body.Parent = Main
+
+local pages, tabs = {}, {}
+local function OpenPage(name)
+	for k, p in pairs(pages) do p.Visible = (k == name) end
+	for k, b in pairs(tabs) do b.BackgroundColor3 = (k == name) and Pal.Red or Pal.Bg end
+end
+
+local function AddPage(name, ord)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(1, -10, 0, 30)
+	b.BackgroundColor3 = Pal.Bg
+	b.Font = Enum.Font.GothamBold
+	b.Text = name
+	b.TextColor3 = Pal.Txt
+	b.TextSize = 10
+	b.LayoutOrder = ord
+	b.Parent = Side
+	Rad(b, 6)
+
+	local sf = Instance.new("ScrollingFrame")
+	sf.Size = UDim2.fromScale(1, 1)
+	sf.BackgroundTransparency = 1
+	sf.ScrollBarThickness = 3
+	sf.Visible = false
+	sf.CanvasSize = UDim2.new(0, 0, 0, 0)
+	sf.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	sf.Parent = Body
+	local ul = Instance.new("UIListLayout"); ul.Padding = UDim.new(0, 5); ul.SortOrder = Enum.SortOrder.LayoutOrder; ul.Parent = sf
+
+	pages[name], tabs[name] = sf, b
+	b.MouseButton1Click:Connect(function() OpenPage(name) end)
+	return sf
+end
+
+local pGen = AddPage("General", 1)
+local pVip = AddPage("VIP / OP", 2)
+local pVis = AddPage("Visual", 3)
+OpenPage("General")
+
+local St = {
+	Safe = false, Speed = 16, Jump = 50, Air = false, Void = false, Fast = false, Afk = false,
+	Hitbox = false, HbSz = 9, Aim = false, AimFov = 150, CamL = false,
+	Fly = false, FlySpd = 55, Noclip = false, Spin = false, SpinSpd = 18,
+	Esp = false, Rag = false, Fps = false,
+	Fov = 70, Zoom = false, Bright = false, NoFog = false
+}
+
+-- 2. Registro de setters para sincronizar botones al resetear
+local ToggleSetters = {}
+
+-- 6. Caché de partes para Noclip sin GetDescendants() por frame
+local noclipParts = {}
+local function RebuildNoclipCache(char)
+	table.clear(noclipParts)
+	if not char then return end
+	for _, p in ipairs(char:GetDescendants()) do
+		if p:IsA("BasePart") then
+			table.insert(noclipParts, p)
+		end
+	end
+end
+RebuildNoclipCache(lp.Character)
+
+local function ApplyNoclipState(enable)
+	for _, p in ipairs(noclipParts) do
+		if p and p.Parent then
+			p.CanCollide = not enable
+		end
+	end
+end
+
+-- 5. ESP estable con Highlight por jugador
+local espHighlights = {}
+local function ClearAllEsp()
+	for plr, hl in pairs(espHighlights) do
+		pcall(function() if hl then hl:Destroy() end end)
+		espHighlights[plr] = nil
+	end
+end
+
+local function UpdatePlayerHighlight(plr)
+	if plr == lp then return end
+	local shouldShow = St.Esp and St.Safe and (KeySys.Tier == "VIP")
+	if not shouldShow then
+		if espHighlights[plr] then
+			pcall(function() espHighlights[plr]:Destroy() end)
+			espHighlights[plr] = nil
+		end
+		return
+	end
+	if plr.Character then
+		local hl = espHighlights[plr]
+		if not hl or not hl.Parent then
+			hl = Instance.new("Highlight")
+			hl.Name = "KNY_ESP_HL"
+			hl.FillColor = Pal.Red
+			hl.OutlineColor = Pal.Gold
+			hl.FillTransparency = 0.65
+			hl.OutlineTransparency = 0.1
+			hl.Adornee = plr.Character
+			hl.Parent = Gui
+			espHighlights[plr] = hl
+		else
+			hl.Adornee = plr.Character
+		end
+	end
+end
+
+local function SyncAllEsp()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		UpdatePlayerHighlight(plr)
+	end
+end
+
+On(Players.PlayerAdded:Connect(function(plr)
+	On(plr.CharacterAdded:Connect(function()
+		task.wait(0.2)
+		UpdatePlayerHighlight(plr)
+	end))
+end))
+
+On(Players.PlayerRemoving:Connect(function(plr)
+	if espHighlights[plr] then
+		pcall(function() espHighlights[plr]:Destroy() end)
+		espHighlights[plr] = nil
+	end
+end))
+
+local hbSaved = {}
+local function ClearHb()
+	for p, d in pairs(hbSaved) do
+		pcall(function()
+			if p and p.Parent then
+				p.Size = d.s; p.Transparency = d.t; p.CanCollide = d.c
+			end
+		end)
+	end
+	table.clear(hbSaved)
+end
+
+local function SyncHb()
+	if not St.Hitbox or not St.Safe or KeySys.Tier ~= "VIP" then ClearHb(); return end
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= lp and plr.Character then
+			local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+			local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+			if hrp and hum and hum.Health > 0 then
+				if not hbSaved[hrp] then
+					hbSaved[hrp] = { s = hrp.Size, t = hrp.Transparency, c = hrp.CanCollide }
+				end
+				pcall(function()
+					hrp.Size = Vector3.new(St.HbSz, St.HbSz, St.HbSz)
+					hrp.Transparency = 0.78
+					hrp.CanCollide = false
+				end)
+			end
+		end
+	end
+end
+
+-- 3. SyncHum reaplicable tras reaparecer
+local speedStepSetter, jumpStepSetter = nil, nil
+local function SyncHum()
+	local h = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+	if not h then return end
+	h.WalkSpeed = St.Speed
+	if h.UseJumpPower then h.JumpPower = St.Jump else h.JumpHeight = math.max(1, math.floor(St.Jump * 0.14)) end
+end
+
+local function ApplyFastPrompts()
+	pcall(function()
+		for _, desc in ipairs(workspace:GetDescendants()) do
+			if desc:IsA("ProximityPrompt") then
+				desc.HoldDuration = St.Fast and 0 or 0.5
+			end
+		end
+	end)
+end
+
+local function ApplyFpsBoost(on)
+	pcall(function()
+		Lighting.GlobalShadows = not on
+		settings().Rendering.QualityLevel = on and Enum.QualityLevel.Level01 or Enum.QualityLevel.Automatic
+	end)
+end
+
+local function UpdateAssistOverlays()
+	local vipActive = St.Safe and (KeySys.Tier == "VIP")
+	FlyPad.Visible = vipActive and St.Fly
+	if not FlyPad.Visible then
+		flyUpHeld = false
+		flyDownHeld = false
+	end
+
+	local aimActive = vipActive and St.Aim
+	FovCircle.Visible = aimActive
+	FovCircle.Size = UDim2.new(0, St.AimFov * 2, 0, St.AimFov * 2)
+	fovStroke.CornerRadius = UDim.new(0, St.AimFov)
+	AimHoldBtn.Visible = aimActive
+	if not aimActive then
+		aimHoldTouch = false
+	end
+end
+
+local function Tog(parent, ord, name, isNew, vipOnly, cb)
+	local f = Instance.new("Frame")
+	f.Size = UDim2.new(1, -4, 0, isNew and 44 or 32)
+	f.BackgroundColor3 = Pal.Card
+	f.LayoutOrder = ord
+	f.Parent = parent
+	Rad(f, 6)
+
+	if isNew then
+		local nt = Instance.new("TextLabel")
+		nt.Size = UDim2.new(0, 32, 0, 12)
+		nt.Position = UDim2.new(0, 8, 0, 2)
+		nt.BackgroundColor3 = Pal.Cyan
+		nt.Font = Enum.Font.GothamBlack
+		nt.Text = "NEW"
+		nt.TextColor3 = Pal.Bg
+		nt.TextSize = 8
+		nt.Parent = f
+		Rad(nt, 3)
+	end
+
+	local l = Instance.new("TextLabel")
+	l.Size = UDim2.new(1, -72, 1, isNew and -12 or 0)
+	l.Position = UDim2.new(0, 8, 0, isNew and 12 or 0)
+	l.BackgroundTransparency = 1
+	l.Font = Enum.Font.GothamBold
+	l.Text = name
+	l.TextColor3 = vipOnly and Pal.Gold or Pal.Txt
+	l.TextSize = 10
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.Parent = f
+
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0, 54, 0, 20)
+	b.Position = UDim2.new(1, -60, 0.5, -10)
+	b.BackgroundColor3 = Pal.Bg
+	b.Font = Enum.Font.GothamBlack
+	b.Text = "OFF"
+	b.TextColor3 = Pal.Txt
+	b.TextSize = 9
+	b.Parent = f
+	Rad(b, 5)
+
+	local cur = false
+	local function Paint(state)
+		cur = state
+		b.Text = cur and "ON" or "OFF"
+		b.BackgroundColor3 = cur and (vipOnly and Pal.Gold or Pal.Red) or Pal.Bg
+		b.TextColor3 = cur and Pal.Bg or Pal.Txt
+	end
+
+	table.insert(ToggleSetters, { name = name, paint = Paint })
+
+	b.MouseButton1Click:Connect(function()
+		if vipOnly and KeySys.Tier ~= "VIP" then Notify("VIP", "Requiere Key VIP/OP.", Pal.Gold); return end
+		local nv = not cur
+		if cb(nv) ~= false then
+			Paint(nv)
+			Notify(name, cur and "ON" or "OFF", cur and Pal.Green or Pal.Sub)
+		end
+	end)
+end
+
+local function Step(parent, ord, name, init, mn, mx, stp, vipOnly, cb)
+	local f = Instance.new("Frame")
+	f.Size = UDim2.new(1, -4, 0, 32)
+	f.BackgroundColor3 = Pal.Card
+	f.LayoutOrder = ord
+	f.Parent = parent
+	Rad(f, 6)
+
+	local l = Instance.new("TextLabel")
+	l.Size = UDim2.new(1, -110, 1, 0)
+	l.Position = UDim2.new(0, 8, 0, 0)
+	l.BackgroundTransparency = 1
+	l.Font = Enum.Font.GothamBold
+	l.Text = name
+	l.TextColor3 = Pal.Txt
+	l.TextSize = 10
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.Parent = f
+
+	local vl = Instance.new("TextLabel")
+	vl.Size = UDim2.new(0, 36, 0, 20)
+	vl.Position = UDim2.new(1, -68, 0.5, -10)
+	vl.BackgroundColor3 = Pal.Bg
+	vl.Font = Enum.Font.GothamBlack
+	vl.Text = tostring(init)
+	vl.TextColor3 = Pal.Green
+	vl.TextSize = 9
+	vl.Parent = f
+	Rad(vl, 4)
+
+	local mb = Instance.new("TextButton")
+	mb.Size = UDim2.new(0, 20, 0, 20)
+	mb.Position = UDim2.new(1, -90, 0.5, -10)
+	mb.BackgroundColor3 = Pal.Bg
+	mb.Font = Enum.Font.GothamBold
+	mb.Text = "-"
+	mb.TextColor3 = Pal.Txt
+	mb.Parent = f
+	Rad(mb, 4)
+
+	local pb = Instance.new("TextButton")
+	pb.Size = UDim2.new(0, 20, 0, 20)
+	pb.Position = UDim2.new(1, -28, 0.5, -10)
+	pb.BackgroundColor3 = Pal.Bg
+	pb.Font = Enum.Font.GothamBold
+	pb.Text = "+"
+	pb.TextColor3 = Pal.Txt
+	pb.Parent = f
+	Rad(pb, 4)
+
+	local v = init
+	local function SetV(nv)
+		v = math.clamp(nv, mn, mx)
+		vl.Text = tostring(v)
+		cb(v)
+	end
+	mb.MouseButton1Click:Connect(function() if vipOnly and KeySys.Tier ~= "VIP" then return end; SetV(v - stp) end)
+	pb.MouseButton1Click:Connect(function() if vipOnly and KeySys.Tier ~= "VIP" then return end; SetV(v + stp) end)
+	return SetV
+end
+
+-- General
+Tog(pGen, 1, "Seguro Activo", false, false, function(v)
+	St.Safe = v
+	if not v then
+		St.Speed = 16; St.Jump = 50; St.Air = false; St.Void = false
+		St.Hitbox = false; St.Aim = false; St.CamL = false; St.Fly = false; St.Noclip = false; St.Spin = false; St.Esp = false
+		ApplyNoclipState(false)
+		ClearHb()
+		SyncAllEsp()
+		UpdateAssistOverlays()
+		if speedStepSetter then speedStepSetter(16) end
+		if jumpStepSetter then jumpStepSetter(50) end
+		SyncHum()
+		for _, item in ipairs(ToggleSetters) do
+			if item.name ~= "Seguro Activo" then
+				item.paint(false)
+			end
+		end
+	else
+		UpdateAssistOverlays()
+	end
+	return true
+end)
+Tog(pGen, 2, "Impulso Aéreo", false, false, function(v) if v and not St.Safe then return false end; St.Air = v; return true end)
+Tog(pGen, 3, "Anti-Void", true, false, function(v) St.Void = v; return true end)
+Tog(pGen, 4, "Fast Prompt", true, false, function(v) St.Fast = v; ApplyFastPrompts(); return true end)
+Tog(pGen, 5, "Anti-AFK", false, false, function(v) St.Afk = v; return true end)
+speedStepSetter = Step(pGen, 6, "Velocidad", 16, 10, 64, 4, false, function(v) if St.Safe then St.Speed = v; SyncHum() end end)
+jumpStepSetter = Step(pGen, 7, "Salto", 50, 30, 120, 5, false, function(v) if St.Safe then St.Jump = v; SyncHum() end end)
+
+-- VIP / OP (sin relleno inútil; Aimbot y Cam Lock diferenciados)
+Tog(pVip, 1, "Hitbox Expander", false, true, function(v) if v and not St.Safe then return false end; St.Hitbox = v; SyncHb(); return true end)
+Step(pVip, 2, "Tamaño Hitbox", 9, 4, 20, 1, true, function(v) St.HbSz = v; SyncHb() end)
+Tog(pVip, 3, "Aimbot (Hold + FOV)", false, true, function(v) if v and not St.Safe then return false end; St.Aim = v; UpdateAssistOverlays(); return true end)
+Step(pVip, 4, "FOV Aimbot", 150, 60, 340, 20, true, function(v) St.AimFov = v; UpdateAssistOverlays() end)
+Tog(pVip, 5, "Cam Lock", true, true, function(v) if v and not St.Safe then return false end; St.CamL = v; return true end)
+Tog(pVip, 6, "ESP Box", true, true, function(v) if v and not St.Safe then return false end; St.Esp = v; SyncAllEsp(); return true end)
+Tog(pVip, 7, "Fly", false, true, function(v) if v and not St.Safe then return false end; St.Fly = v; UpdateAssistOverlays(); return true end)
+Step(pVip, 8, "Velocidad Fly", 55, 20, 140, 10, true, function(v) St.FlySpd = v end)
+Tog(pVip, 9, "Noclip", false, true, function(v)
+	if v and not St.Safe then return false end
+	St.Noclip = v
+	RebuildNoclipCache(lp.Character)
+	ApplyNoclipState(v)
+	return true
+end)
+Tog(pVip, 10, "Spinbot", false, true, function(v) if v and not St.Safe then return false end; St.Spin = v; return true end)
+Step(pVip, 11, "Vel Spinbot", 18, 5, 50, 5, true, function(v) St.SpinSpd = v end)
+Tog(pVip, 12, "Anti-Ragdoll", false, true, function(v) St.Rag = v; return true end)
+Tog(pVip, 13, "FPS Boost OP", false, true, function(v) St.Fps = v; ApplyFpsBoost(v); return true end)
+
+-- Visual
+Step(pVis, 1, "FOV Cámara", 70, 60, 110, 5, false, function(v) St.Fov = v; if workspace.CurrentCamera then workspace.CurrentCamera.FieldOfView = v end end)
+Tog(pVis, 2, "Zoom Amplio", false, false, function(v) St.Zoom = v; lp.CameraMaxZoomDistance = v and 1000 or 128; return true end)
+Tog(pVis, 3, "FullBright", false, false, function(v) St.Bright = v; Lighting.Brightness = v and 2.5 or 1; return true end)
+Tog(pVis, 4, "Sin Niebla", false, false, function(v) St.NoFog = v; Lighting.FogEnd = v and 100000 or 500; return true end)
+
+On(lp.CharacterAdded:Connect(function(newChar)
+	task.wait(0.25)
+	RebuildNoclipCache(newChar)
+	if St.Safe then
+		SyncHum()
+	end
+	if St.Noclip and St.Safe and KeySys.Tier == "VIP" then
+		ApplyNoclipState(true)
+	end
+end))
+
+On(UserInputService.JumpRequest:Connect(function()
+	if St.Air and St.Safe and lp.Character then
+		local hrp = lp.Character:FindFirstChild("HumanoidRootPart")
+		if hrp then hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 60, hrp.AssemblyLinearVelocity.Z) end
+	end
+end))
+
+On(lp.Idled:Connect(function()
+	if St.Afk then
+		pcall(function()
+			local vu = game:GetService("VirtualUser")
+			vu:CaptureController()
+			vu:ClickButton2(Vector2.zero)
+		end)
+	end
+end))
+
+local function IsEnemy(plr)
+	if plr == lp then return false end
+	if lp.Team and plr.Team and plr.Team == lp.Team then
+		return false
+	end
+	return true
+end
+
+local function FindAimTarget(maxDist)
+	local cam = workspace.CurrentCamera
+	if not cam then return nil end
+	local mid = Vector2.new(cam.ViewportSize.X * 0.5, cam.ViewportSize.Y * 0.5)
+	local best, bd = nil, maxDist or math.huge
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if IsEnemy(plr) and plr.Character then
+			local h2 = plr.Character:FindFirstChildOfClass("Humanoid")
+			local hd = plr.Character:FindFirstChild("Head")
+			if h2 and h2.Health > 0 and hd then
+				local sp, vis = cam:WorldToViewportPoint(hd.Position)
+				if vis and sp.Z > 0 then
+					local d = (Vector2.new(sp.X, sp.Y) - mid).Magnitude
+					if d < bd then bd = d; best = hd end
+				end
+			end
+		end
+	end
+	return best
+end
+
+-- Carga 20s con rotación del avatar 3D
+task.spawn(function()
+	local t0 = os.clock()
+	while LoadScreen and LoadScreen.Parent do
+		local el = os.clock() - t0
+		local p = math.clamp(el / 20, 0, 1)
+		LoadBarFill.Size = UDim2.new(p, 0, 1, 0)
+		LoadStatus.Text = string.format("Cargando 3D: %d%% (%.1fs)", math.floor(p * 100), math.max(0, 20 - el))
+		if AvatarPivot.PrimaryPart then
+			AvatarPivot:PivotTo(CFrame.new(0, 0, 0) * CFrame.Angles(0, el * 1.4, 0))
+		end
+		if p >= 1 then break end
+		task.wait(0.05)
+	end
+	if LoadScreen and LoadScreen.Parent then LoadScreen:Destroy() end
+	KeyWin.Visible = true
+	Notify("KNY V2.0", "Carga 3D completa.", Pal.Green)
+end)
+
+local hbAcc, tMove = 0, 0
+On(RunService.RenderStepped:Connect(function(dt)
+	tMove += dt
+	if LoadScreen and LoadScreen.Parent then
+		TitleMove.Position = UDim2.new(0.5, -110 + math.sin(tMove * 2.5) * 35, 0.1, math.cos(tMove * 3) * 6)
+	end
+
+	if phase == "RUN" and Gui.Parent then
+		local reqS = isVipMode and 35 or 12
+		local reqT = isVipMode and 25 or 10
+		local el = os.clock() - tStart
+		local pinOk = KeySys.Pin8 ~= nil and Pin8In.Text == KeySys.Pin8
+		local vipOk = (not isVipMode) or (stepOk1 and stepOk2 and stepOk3 and KeySys.VipCode ~= nil and VipCodeIn.Text == KeySys.VipCode)
+		if el >= reqS and taps >= reqT and pinOk and vipOk then
+			phase = "DONE"
+			local nk = GenKey(isVipMode and "KVIP" or "K9", isVipMode)
+			if isVipMode then KeySys.Vip = nk else KeySys.Normal = nk end
+			KeyInput.Text = nk
+			TrialAction.Text = "KEY: " .. nk
+			KeyMsg.Text = "Key lista de 1 uso. Tócala para copiar o entra."
+			pcall(function() if type(setclipboard) == "function" then setclipboard(nk) end end)
+			Notify("Key Lista", nk, Pal.Green)
+		end
+	end
+
+	local ch = lp.Character
+	local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+	local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+	if St.Safe and hrp and hum then
+		if St.Void and hrp.Position.Y < -45 then
+			hrp.AssemblyLinearVelocity = Vector3.new(0, 75, 0)
+		end
+		if KeySys.Tier == "VIP" then
+			if St.Spin then
+				hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(St.SpinSpd), 0)
+			end
+			if St.Noclip then
+				ApplyNoclipState(true)
+			end
+			if St.Fly then
+				local vy = 0
+				if flyUpHeld or UserInputService:IsKeyDown(Enum.KeyCode.Space) then vy = St.FlySpd end
+				if flyDownHeld or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then vy = -St.FlySpd end
+				hrp.AssemblyLinearVelocity = Vector3.new(hum.MoveDirection.X * St.FlySpd, vy, hum.MoveDirection.Z * St.FlySpd)
+			end
+			if St.Rag and hum:GetState() == Enum.HumanoidStateType.Physics then
+				hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+			end
+
+			local cam = workspace.CurrentCamera
+			local holdingAim = aimHoldTouch or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+			if St.Aim and holdingAim and cam then
+				local tgt = FindAimTarget(St.AimFov)
+				if tgt then
+					cam.CFrame = cam.CFrame:Lerp(CFrame.new(cam.CFrame.Position, tgt.Position), 0.22)
+				end
+			elseif St.CamL and cam then
+				local tgt = FindAimTarget(math.huge)
+				if tgt then
+					cam.CFrame = cam.CFrame:Lerp(CFrame.new(cam.CFrame.Position, tgt.Position), 0.45)
+				end
+			end
+		end
+	end
+
+	hbAcc += dt
+	if hbAcc >= 1.2 then
+		hbAcc = 0
+		SyncHb()
+	end
+end))
+
+KX.MouseButton1Click:Connect(function() KeyWin.Visible = false; FloatBtn.Visible = true end)
+CloseBtn.MouseButton1Click:Connect(function() Main.Visible = false; FloatBtn.Visible = true end)
+MinBtn.MouseButton1Click:Connect(function()
+	local m = Side.Visible
+	Side.Visible = not m; Body.Visible = not m
+	Main.Size = m and UDim2.new(0, 520, 0, 38) or UDim2.new(0, 520, 0, 340)
+	MinBtn.Text = m and "+" or "-"
+end)
+
+FloatBtn.MouseButton1Click:Connect(function()
+	FloatBtn.Visible = false
+	if KeySys.Tier == "NONE" then KeyWin.Visible = true else Main.Visible = true end
+end)
+
+EnterBtn.MouseButton1Click:Connect(function()
+	local k = KeyInput.Text:gsub("[%s%c]", ""):upper()
+	if k == "" or KeySys.Used[k] then Notify("Key", "Inválida o ya usada.", Pal.Red); return end
+	if k == KeySys.Vip then
+		KeySys.Used[k] = true; KeySys.Vip = nil; KeySys.Tier = "VIP"; KeyInput.Text = ""
+		MainTitle.Text = "KNY V2.0 • VIP / OP"; KeyWin.Visible = false; Main.Visible = true
+		SyncAllEsp()
+		UpdateAssistOverlays()
+		Notify("VIP / OP", "Opciones OP activas.", Pal.Gold)
+	elseif k == KeySys.Normal then
+		KeySys.Used[k] = true; KeySys.Normal = nil; KeySys.Tier = "NORMAL"; KeyInput.Text = ""
+		MainTitle.Text = "KNY V2.0 • NORMAL"; KeyWin.Visible = false; Main.Visible = true
+		Notify("Normal", "Key quemada tras 1 uso.", Pal.Green)
+	else
+		Notify("Key", "No coincide con ninguna key activa.", Pal.Red)
+	end
+end)
+
+On(Gui.Destroying:Connect(function()
+	ClearHb()
+	ClearAllEsp()
+	ApplyNoclipState(false)
+	for _, c in ipairs(Conns) do pcall(function() c:Disconnect() end) end
+end))
